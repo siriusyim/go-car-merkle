@@ -11,7 +11,6 @@ import (
 	"github.com/ipfs/go-cidutil"
 	"github.com/ipfs/go-cidutil/cidenc"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
-	chunker "github.com/ipfs/go-ipfs-chunker"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	files "github.com/ipfs/go-ipfs-files"
 	ipld "github.com/ipfs/go-ipld-format"
@@ -19,6 +18,8 @@ import (
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-car"
+	chunker "github.com/siriusyim/go-car-merkle/chunker"
+	"github.com/siriusyim/go-car-merkle/dagbuilder"
 
 	//"github.com/ipld/go-car/v2"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
@@ -132,7 +133,7 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 		return cid.Undef, xerrors.Errorf("failed to create temporary filestore: %w", err)
 	}
 
-	finalRoot1, err := Build(ctx, file, fstore, true)
+	finalRoot1, err := Build(ctx, file, fstore, true, srcPath)
 	if err != nil {
 		_ = fstore.Close()
 		return cid.Undef, xerrors.Errorf("failed to import file to store to compute root: %w", err)
@@ -154,7 +155,7 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 		return cid.Undef, xerrors.Errorf("failed to rewind file: %w", err)
 	}
 
-	finalRoot2, err := Build(ctx, file, bs, true)
+	finalRoot2, err := Build(ctx, file, bs, true, srcPath)
 	if err != nil {
 		_ = bs.Close()
 		return cid.Undef, xerrors.Errorf("failed to create UnixFS DAG with carv2 blockstore: %w", err)
@@ -174,7 +175,7 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 const UnixfsChunkSize uint64 = 1 << 20
 const UnixfsLinksPerLevel = 1024
 
-func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filestore bool) (cid.Cid, error) {
+func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filestore bool, srcPath string) (cid.Cid, error) {
 	b, err := CidBuilder()
 	if err != nil {
 		return cid.Undef, err
@@ -191,12 +192,14 @@ func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filest
 		Dagserv:    bufdag,
 		NoCopy:     filestore,
 	}
-
-	db, err := params.New(chunker.NewSizeSplitter(reader, int64(UnixfsChunkSize)))
+	spl := chunker.NewSliceSplitter(reader, int64(UnixfsChunkSize), srcPath, func(srcPath string, offset uint64, size uint32, eof bool) {
+		return
+	})
+	db, err := dagbuilder.WrappedDagBuilder(&params, spl)
 	if err != nil {
 		return cid.Undef, err
 	}
-	nd, err := balanced.Layout(db)
+	nd, err := balanced.LayoutI(db)
 	if err != nil {
 		return cid.Undef, err
 	}
