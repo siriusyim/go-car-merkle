@@ -18,6 +18,7 @@ import (
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/multiformats/go-multicodec"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 )
 
 var listCmd = &cli.Command{
@@ -142,7 +143,7 @@ func ListCar(c *cli.Context) error {
 
 func listUnixfs(c *cli.Context, outStream io.Writer) error {
 	if c.Args().Len() == 0 {
-		return fmt.Errorf("must provide file to read from. unixfs reading requires random access")
+		return xerrors.Errorf("must provide file to read from. unixfs reading requires random access")
 	}
 
 	bs, err := blockstore.OpenReadOnly(c.Args().First())
@@ -154,7 +155,7 @@ func listUnixfs(c *cli.Context, outStream io.Writer) error {
 	ls.StorageReadOpener = func(_ ipld.LinkContext, l ipld.Link) (io.Reader, error) {
 		cl, ok := l.(cidlink.Link)
 		if !ok {
-			return nil, fmt.Errorf("not a cidlink")
+			return nil, xerrors.Errorf("not a cidlink")
 		}
 		blk, err := bs.Get(c.Context, cl.Cid)
 		if err != nil {

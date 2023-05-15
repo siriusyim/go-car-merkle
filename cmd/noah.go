@@ -1,9 +1,7 @@
 package main
 
 import (
-	"fmt"
 	"io"
-	"log"
 	"os"
 
 	llog "log"
@@ -12,6 +10,8 @@ import (
 
 	logging "github.com/ipfs/go-log/v2"
 )
+
+var log = logging.Logger("noah")
 
 func init() {
 	llog.SetOutput(io.Discard)
@@ -35,8 +35,7 @@ func main1() int {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Println(err)
-		fmt.Printf("%s\n", err.Error())
+		log.Error(err)
 		return 1
 	}
 	return 0

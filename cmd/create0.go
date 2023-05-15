@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"path"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 )
 
 var create0Cmd = &cli.Command{
@@ -43,11 +43,11 @@ var create0Cmd = &cli.Command{
 func CreateCar(c *cli.Context) error {
 	var err error
 	if c.Args().Len() == 0 {
-		return fmt.Errorf("a source location to build the car from must be specified")
+		return xerrors.Errorf("a source location to build the car from must be specified")
 	}
 
 	if !c.IsSet("file") {
-		return fmt.Errorf("a file destination must be specified")
+		return xerrors.Errorf("a file destination must be specified")
 	}
 
 	// make a cid with the right length that we eventually will patch with the root.
@@ -69,7 +69,7 @@ func CreateCar(c *cli.Context) error {
 	case 2:
 		// already the default
 	default:
-		return fmt.Errorf("invalid CAR version %d", c.Int("version"))
+		return xerrors.Errorf("invalid CAR version %d", c.Int("version"))
 	}
 
 	cdest, err := blockstore.OpenReadWrite(c.String("file"), []cid.Cid{proxyRoot}, options...)
@@ -96,7 +96,7 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 	ls.StorageReadOpener = func(_ ipld.LinkContext, l ipld.Link) (io.Reader, error) {
 		cl, ok := l.(cidlink.Link)
 		if !ok {
-			return nil, fmt.Errorf("not a cidlink")
+			return nil, xerrors.Errorf("not a cidlink")
 		}
 		blk, err := bs.Get(ctx, cl.Cid)
 		if err != nil {
@@ -109,7 +109,7 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 		return buf, func(l ipld.Link) error {
 			cl, ok := l.(cidlink.Link)
 			if !ok {
-				return fmt.Errorf("not a cidlink")
+				return xerrors.Errorf("not a cidlink")
 			}
 			blk, err := blocks.NewBlockWithCid(buf.Bytes(), cl.Cid)
 			if err != nil {
@@ -142,7 +142,7 @@ func writeFiles(ctx context.Context, bs *blockstore.ReadWrite, paths ...string) 
 	}
 	rcl, ok := root.(cidlink.Link)
 	if !ok {
-		return cid.Undef, fmt.Errorf("could not interpret %s", root)
+		return cid.Undef, xerrors.Errorf("could not interpret %s", root)
 	}
 
 	return rcl.Cid, nil

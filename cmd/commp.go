@@ -1,13 +1,12 @@
 package main
 
 import (
-	"fmt"
-
 	commcid "github.com/filecoin-project/go-fil-commcid"
 	commp "github.com/filecoin-project/go-fil-commp-hashhash"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-car"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 
 	"github.com/ipld/go-car/v2/blockstore"
 	ipldprime "github.com/ipld/go-ipld-prime"
@@ -17,15 +16,16 @@ import (
 )
 
 var commpCmd = &cli.Command{
-	Name:   "commp",
-	Usage:  "compute commp CID(PieceCID)",
-	Action: commpCar,
+	Name:      "commp",
+	Usage:     "compute commp CID(PieceCID)",
+	ArgsUsage: "<inputCarPath> <inputCarRoot>",
+	Action:    commpCar,
 }
 
 // ListCar is a command to output the cids in a car.
 func commpCar(c *cli.Context) error {
 	if c.Args().Len() != 2 {
-		return fmt.Errorf("a car location must be specified")
+		return xerrors.Errorf("a car location must be specified")
 	}
 
 	bs, err := blockstore.OpenReadOnly(c.Args().First())
@@ -55,7 +55,7 @@ func commpCar(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("CommP Cid:%s\n", commCid.String())
+	log.Info("CommP Cid: ", commCid.String())
 	return nil
 }
 

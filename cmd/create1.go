@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 
@@ -40,7 +39,7 @@ var create1Cmd = &cli.Command{
 
 func Create1Car(cctx *cli.Context) error {
 	if cctx.Args().Len() != 2 {
-		return fmt.Errorf("usage: generate-car <inputPath> <outputPath>")
+		return xerrors.Errorf("usage: generate-car <inputPath> <outputPath>")
 	}
 
 	inPath := cctx.Args().First()
@@ -58,13 +57,13 @@ func Create1Car(cctx *cli.Context) error {
 	// generate and import the UnixFS DAG into a filestore (positional reference) CAR.
 	root, err := CreateFilestore(cctx.Context, inPath, tmp)
 	if err != nil {
-		return fmt.Errorf("failed to import file using unixfs: %w", err)
+		return xerrors.Errorf("failed to import file using unixfs: %w", err)
 	}
 
 	// open the positional reference CAR as a filestore.
 	fs, err := stores.ReadOnlyFilestore(tmp)
 	if err != nil {
-		return fmt.Errorf("failed to open filestore from carv2 in path %s: %w", outPath, err)
+		return xerrors.Errorf("failed to open filestore from carv2 in path %s: %w", outPath, err)
 	}
 	defer fs.Close() //nolint:errcheck
 
@@ -85,7 +84,7 @@ func Create1Car(cctx *cli.Context) error {
 	).Write(
 		f,
 	); err != nil {
-		return fmt.Errorf("failed to write CAR to output file: %w", err)
+		return xerrors.Errorf("failed to write CAR to output file: %w", err)
 	}
 
 	err = f.Close()
@@ -95,7 +94,7 @@ func Create1Car(cctx *cli.Context) error {
 
 	encoder := cidenc.Encoder{Base: multibase.MustNewEncoder(multibase.Base32)}
 
-	fmt.Println("Payload CID: ", encoder.Encode(root))
+	log.Info("Payload CID: ", encoder.Encode(root))
 
 	return nil
 }
@@ -214,7 +213,7 @@ var DefaultHashFunction = uint64(mh.BLAKE2B_MIN + 31)
 func CidBuilder() (cid.Builder, error) {
 	prefix, err := merkledag.PrefixForCidVersion(1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize UnixFS CID Builder: %w", err)
+		return nil, xerrors.Errorf("failed to initialize UnixFS CID Builder: %w", err)
 	}
 	prefix.MhType = DefaultHashFunction
 	b := cidutil.InlineBuilder{

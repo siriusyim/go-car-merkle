@@ -24,9 +24,10 @@ import (
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/ipld/go-ipld-prime/storage"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 )
 
-var ErrNotDir = fmt.Errorf("not a directory")
+var ErrNotDir = xerrors.Errorf("not a directory")
 
 var extractCmd = &cli.Command{
 	Name:      "extract",
@@ -164,7 +165,7 @@ func extractRoot(c *cli.Context, ls *ipld.LinkSystem, root cid.Cid, outputDir st
 	count, err := extractDir(c, ls, ufn, outputResolvedDir, "/", path)
 	if err != nil {
 		if !errors.Is(err, ErrNotDir) {
-			return 0, fmt.Errorf("%s: %w", root, err)
+			return 0, xerrors.Errorf("%s: %w", root, err)
 		}
 
 		// if it's not a directory, it's a file.
@@ -198,17 +199,17 @@ func extractRoot(c *cli.Context, ls *ipld.LinkSystem, root cid.Cid, outputDir st
 func resolvePath(root, pth string) (string, error) {
 	rp, err := filepath.Rel("/", pth)
 	if err != nil {
-		return "", fmt.Errorf("couldn't check relative-ness of %s: %w", pth, err)
+		return "", xerrors.Errorf("couldn't check relative-ness of %s: %w", pth, err)
 	}
 	joined := path.Join(root, rp)
 
 	basename := path.Dir(joined)
 	final, err := filepath.EvalSymlinks(basename)
 	if err != nil {
-		return "", fmt.Errorf("couldn't eval symlinks in %s: %w", basename, err)
+		return "", xerrors.Errorf("couldn't eval symlinks in %s: %w", basename, err)
 	}
 	if final != path.Clean(basename) {
-		return "", fmt.Errorf("path attempts to redirect through symlinks")
+		return "", xerrors.Errorf("path attempts to redirect through symlinks")
 	}
 	return joined, nil
 }
@@ -248,7 +249,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 		}
 
 		if n.Kind() != ipld.Kind_Link {
-			return 0, fmt.Errorf("unexpected map value for %s at %s", name, outputPath)
+			return 0, xerrors.Errorf("unexpected map value for %s at %s", name, outputPath)
 		}
 		// a directory may be represented as a map of name:<link> if unixADL is applied
 		vl, err := n.AsLink()
@@ -306,7 +307,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 			return 1, nil
 		case data.Data_Symlink:
 			if nextRes == "" {
-				return 0, fmt.Errorf("cannot extract a symlink to stdout")
+				return 0, xerrors.Errorf("cannot extract a symlink to stdout")
 			}
 			data := ufsNode.Data.Must().Bytes()
 			if err := os.Symlink(string(data), nextRes); err != nil {
@@ -314,7 +315,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 			}
 			return 1, nil
 		default:
-			return 0, fmt.Errorf("unknown unixfs type: %d", ufsNode.DataType.Int())
+			return 0, xerrors.Errorf("unknown unixfs type: %d", ufsNode.DataType.Int())
 		}
 	}
 
@@ -328,7 +329,7 @@ func extractDir(c *cli.Context, ls *ipld.LinkSystem, n ipld.Node, outputRoot, ou
 	}
 
 	if outputPath == "-" && len(matchPath) == 0 {
-		return 0, fmt.Errorf("cannot extract a directory to stdout, use a path to extract a specific file")
+		return 0, xerrors.Errorf("cannot extract a directory to stdout, use a path to extract a specific file")
 	}
 
 	// everything
@@ -393,10 +394,10 @@ func pathSegments(path string) ([]string, error) {
 			if i == 0 || i == len(segments)-1 {
 				continue
 			}
-			return nil, fmt.Errorf("invalid empty path segment at position %d", i)
+			return nil, xerrors.Errorf("invalid empty path segment at position %d", i)
 		}
 		if segments[i] == "." || segments[i] == ".." {
-			return nil, fmt.Errorf("'%s' is unsupported in paths", segments[i])
+			return nil, xerrors.Errorf("'%s' is unsupported in paths", segments[i])
 		}
 		filtered = append(filtered, segments[i])
 	}
