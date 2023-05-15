@@ -5,8 +5,8 @@ go 1.20
 require (
 	github.com/ipfs/go-cid v0.3.2
 	github.com/ipfs/go-ipfs-chunker v0.0.1
-	github.com/ipfs/go-ipfs-files v0.2.0
 	github.com/ipfs/go-ipld-format v0.2.0
+	github.com/ipfs/go-merkledag v0.5.1
 	github.com/ipfs/go-unixfs v0.4.5
 	github.com/libp2p/go-buffer-pool v0.1.0
 )
@@ -28,9 +28,9 @@ require (
 	github.com/ipfs/go-ipfs-util v0.0.2 // indirect
 	github.com/ipfs/go-ipld-cbor v0.0.5 // indirect
 	github.com/ipfs/go-ipld-legacy v0.1.0 // indirect
+	github.com/ipfs/go-libipfs v0.1.0 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
-	github.com/ipfs/go-merkledag v0.5.1 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-verifcid v0.0.1 // indirect
 	github.com/ipld/go-codec-dagpb v1.3.0 // indirect
@@ -61,3 +61,5 @@ require (
 	google.golang.org/protobuf v1.28.1 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
+
+replace github.com/ipfs/go-unixfs => ../go-unixfs
