@@ -9,17 +9,21 @@ import (
 	pb "github.com/ipfs/go-unixfs/pb"
 )
 
+type AddAction func()
+
 type WrapDagBuilder struct {
-	db ihelper.Helper
+	db    ihelper.Helper
+	addCb AddAction
 }
 
-func WrappedDagBuilder(params *ihelper.DagBuilderParams, spl chunker.Splitter) (ihelper.Helper, error) {
+func WrappedDagBuilder(params *ihelper.DagBuilderParams, spl chunker.Splitter /*, addcb AddAction*/) (ihelper.Helper, error) {
 	db, err := params.New(spl)
 	if err != nil {
 		return nil, err
 	}
 	return &WrapDagBuilder{
 		db: db,
+		// addCb: addcb,
 	}, nil
 }
 

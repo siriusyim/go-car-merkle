@@ -20,6 +20,8 @@ import (
 	"github.com/ipld/go-car"
 	chunker "github.com/siriusyim/go-car-merkle/chunker"
 	"github.com/siriusyim/go-car-merkle/dagbuilder"
+	"github.com/siriusyim/go-car-merkle/readwrite"
+	"github.com/siriusyim/go-car-merkle/utils"
 
 	//"github.com/ipld/go-car/v2"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
@@ -83,7 +85,10 @@ func Create1Car(cctx *cli.Context) error {
 		}},
 		car.MaxTraversalLinks(MaxTraversalLinks),
 	).Write(
-		f,
+		utils.WrappedWriter(f, outPath, func(path string, cid cid.Cid, count, total int) {
+			log.Info(">>>>>> Write dstPath:", path, " count:", count, " total: ", total, " cid: ", cid.String())
+			return
+		}),
 	); err != nil {
 		return xerrors.Errorf("failed to write CAR to output file: %w", err)
 	}
@@ -128,7 +133,9 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 
 	// Step 1. Compute the UnixFS DAG and write it to a CARv2 file to get
 	// the root CID of the DAG.
-	fstore, err := stores.ReadWriteFilestore(tmp)
+	fstore, err := readwrite.ReadWriteFilestore(tmp, func(path string, count, total int) {
+		return
+	})
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to create temporary filestore: %w", err)
 	}
@@ -145,7 +152,10 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 
 	// Step 2. We now have the root of the UnixFS DAG, and we can write the
 	// final CAR for real under `dst`.
-	bs, err := stores.ReadWriteFilestore(dstPath, finalRoot1)
+	bs, err := readwrite.ReadWriteFilestore(dstPath, func(path string, count, total int) {
+		//log.Info(">>>>>> Write dstPath:", path, " count:", count, " total: ", total)
+		return
+	}, finalRoot1)
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to create a carv2 read/write filestore: %w", err)
 	}
@@ -172,7 +182,6 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 	return finalRoot2, nil
 }
 
-const UnixfsChunkSize uint64 = 1 << 20
 const UnixfsLinksPerLevel = 1024
 
 func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filestore bool, srcPath string) (cid.Cid, error) {
@@ -192,7 +201,8 @@ func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filest
 		Dagserv:    bufdag,
 		NoCopy:     filestore,
 	}
-	spl := chunker.NewSliceSplitter(reader, int64(UnixfsChunkSize), srcPath, func(srcPath string, offset uint64, size uint32, eof bool) {
+	spl := chunker.NewSliceSplitter(reader, int64(chunker.UnixfsChunkSize), srcPath, func(srcPath string, offset uint64, size uint32, eof bool) {
+		//log.Info("<<<<<< Read srcPath:", srcPath, " offset:", offset, " size:", size)
 		return
 	})
 	db, err := dagbuilder.WrappedDagBuilder(&params, spl)

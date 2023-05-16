@@ -7,7 +7,9 @@ import (
 	pool "github.com/libp2p/go-buffer-pool"
 )
 
-type SplitterCallBack func(srcPath string, offset uint64, size uint32, eof bool)
+const UnixfsChunkSize uint64 = 1 << 20
+
+type SplitterAction func(srcPath string, offset uint64, size uint32, eof bool)
 
 type sliceSplitter struct {
 	r    io.Reader
@@ -17,13 +19,13 @@ type sliceSplitter struct {
 	//记录原文件路径
 	srcPath string
 	//允许外部传入回调函数获取原始文件读取信息
-	cb SplitterCallBack
+	cb SplitterAction
 	//记录当前文件读取offset
 	offset uint64
 }
 
 // NewSliceSplitter returns a new size-based Splitter with the given block size.
-func NewSliceSplitter(r io.Reader, size int64, srcPath string, cb SplitterCallBack) chunkers.Splitter {
+func NewSliceSplitter(r io.Reader, size int64, srcPath string, cb SplitterAction) chunkers.Splitter {
 	return &sliceSplitter{
 		srcPath: srcPath,
 		r:       r,
