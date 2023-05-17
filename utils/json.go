@@ -37,12 +37,11 @@ func WriteJson(filePath string, indent string, val interface{}) error {
 	if indent == "" {
 		data, err = json.Marshal(val)
 	} else {
-		data, err = json.MarshalIndent(val, "", "\t")
+		data, err = json.MarshalIndent(val, "", indent)
 	}
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(filePath, data, 0644)
-	return err
+	return ioutil.WriteFile(filePath, data, 0644)
 }

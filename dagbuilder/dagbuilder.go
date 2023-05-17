@@ -9,21 +9,23 @@ import (
 	pb "github.com/ipfs/go-unixfs/pb"
 )
 
-type AddAction func()
+type HelperAction func(c cid.Cid, nodeType pb.Data_DataType)
+
+func DefaultHelperAction(c cid.Cid, nodeType pb.Data_DataType) {}
 
 type WrapDagBuilder struct {
-	db    ihelper.Helper
-	addCb AddAction
+	db  ihelper.Helper
+	hcb HelperAction
 }
 
-func WrappedDagBuilder(params *ihelper.DagBuilderParams, spl chunker.Splitter /*, addcb AddAction*/) (ihelper.Helper, error) {
+func WrappedDagBuilder(params *ihelper.DagBuilderParams, spl chunker.Splitter, hcb HelperAction) (ihelper.Helper, error) {
 	db, err := params.New(spl)
 	if err != nil {
 		return nil, err
 	}
 	return &WrapDagBuilder{
-		db: db,
-		// addCb: addcb,
+		db:  db,
+		hcb: hcb,
 	}, nil
 }
 
@@ -52,7 +54,26 @@ func (w *WrapDagBuilder) FillNodeLayer(node *ihelper.FSNodeOverDag) error {
 }
 
 func (w *WrapDagBuilder) NewLeafDataNode(fsNodeType pb.Data_DataType) (node ipld.Node, dataSize uint64, err error) {
-	return w.db.NewLeafDataNode(fsNodeType)
+	fileData, err := w.Next()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	dataSize = uint64(len(fileData))
+
+	// Create a new leaf node containing the file chunk data.
+	node, err = w.NewLeafNode(fileData, fsNodeType)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	w.hcb(node.Cid(), fsNodeType)
+
+	// Convert this leaf to a `FilestoreNode` if needed.
+	node = w.ProcessFileStore(node, dataSize)
+
+	return node, dataSize, nil
+
 }
 
 func (w *WrapDagBuilder) ProcessFileStore(node ipld.Node, dataSize uint64) ipld.Node {

@@ -1,13 +1,11 @@
 package readwrite
 
 import (
-	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-car/v2/blockstore"
-
 	"github.com/filecoin-project/boost-gfm/stores"
-
+	"github.com/ipfs/go-cid"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	carv2 "github.com/ipld/go-car/v2"
+	"github.com/ipld/go-car/v2/blockstore"
 )
 
 func ReadWriteFilestore(path string, cb stores.WriteAction, roots ...cid.Cid) (stores.ClosableBlockstore, error) {

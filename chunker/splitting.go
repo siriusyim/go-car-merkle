@@ -5,11 +5,14 @@ import (
 
 	chunkers "github.com/ipfs/go-ipfs-chunker"
 	pool "github.com/libp2p/go-buffer-pool"
+	"github.com/siriusyim/go-car-merkle/utils"
 )
 
 const UnixfsChunkSize uint64 = 1 << 20
 
 type SplitterAction func(srcPath string, offset uint64, size uint32, eof bool)
+
+func DefaultSplitterAction(srcPath string, offset uint64, size uint32, eof bool) {}
 
 type sliceSplitter struct {
 	r    io.Reader
@@ -22,16 +25,25 @@ type sliceSplitter struct {
 	cb SplitterAction
 	//记录当前文件读取offset
 	offset uint64
+
+	utils.Subject
 }
 
 // NewSliceSplitter returns a new size-based Splitter with the given block size.
-func NewSliceSplitter(r io.Reader, size int64, srcPath string, cb SplitterAction) chunkers.Splitter {
+func NewSliceSplitter(r io.Reader, size int64, srcPath string, cb SplitterAction, call bool) chunkers.Splitter {
+	var callback SplitterAction
+	if call {
+		callback = cb
+	} else {
+		callback = DefaultSplitterAction
+	}
 	return &sliceSplitter{
 		srcPath: srcPath,
 		r:       r,
 		size:    uint32(size),
-		cb:      cb,
+		cb:      callback,
 		offset:  0,
+		Subject: utils.NewSubject(),
 	}
 }
 

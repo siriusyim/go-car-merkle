@@ -11,6 +11,7 @@ import (
 	"github.com/ipfs/go-cidutil"
 	"github.com/ipfs/go-cidutil/cidenc"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
+	chunker "github.com/ipfs/go-ipfs-chunker"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	files "github.com/ipfs/go-ipfs-files"
 	ipld "github.com/ipfs/go-ipld-format"
@@ -18,17 +19,16 @@ import (
 	"github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipld/go-car"
-	chunker "github.com/siriusyim/go-car-merkle/chunker"
-	"github.com/siriusyim/go-car-merkle/dagbuilder"
-	"github.com/siriusyim/go-car-merkle/readwrite"
-	"github.com/siriusyim/go-car-merkle/utils"
-
-	//"github.com/ipld/go-car/v2"
 	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 	"github.com/multiformats/go-multibase"
 	mh "github.com/multiformats/go-multihash"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
+
+	mc "github.com/siriusyim/go-car-merkle/chunker"
+	"github.com/siriusyim/go-car-merkle/dagbuilder"
+	"github.com/siriusyim/go-car-merkle/meta"
+	"github.com/siriusyim/go-car-merkle/readwrite"
 )
 
 var MaxTraversalLinks uint64 = 32 * (1 << 20)
@@ -38,6 +38,12 @@ var create1Cmd = &cli.Command{
 	Usage:     "Create a car file",
 	ArgsUsage: "<inputPath> <outputPath>",
 	Action:    Create1Car,
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "json",
+			Usage: "The meta file to write to",
+		},
+	},
 }
 
 func Create1Car(cctx *cli.Context) error {
@@ -56,9 +62,9 @@ func Create1Car(cctx *cli.Context) error {
 
 	tmp := ftmp.Name()
 	defer os.Remove(tmp) //nolint:errcheck
-
+	msrv := meta.New()
 	// generate and import the UnixFS DAG into a filestore (positional reference) CAR.
-	root, err := CreateFilestore(cctx.Context, inPath, tmp)
+	root, err := CreateFilestore(cctx.Context, inPath, tmp, msrv)
 	if err != nil {
 		return xerrors.Errorf("failed to import file using unixfs: %w", err)
 	}
@@ -85,10 +91,7 @@ func Create1Car(cctx *cli.Context) error {
 		}},
 		car.MaxTraversalLinks(MaxTraversalLinks),
 	).Write(
-		utils.WrappedWriter(f, outPath, func(path string, cid cid.Cid, count, total int) {
-			log.Info(">>>>>> Write dstPath:", path, " count:", count, " total: ", total, " cid: ", cid.String())
-			return
-		}),
+		msrv.GetWriter(f, outPath, true),
 	); err != nil {
 		return xerrors.Errorf("failed to write CAR to output file: %w", err)
 	}
@@ -102,10 +105,10 @@ func Create1Car(cctx *cli.Context) error {
 
 	log.Info("Payload CID: ", encoder.Encode(root))
 
-	return nil
+	return msrv.PrintJson(cctx.String("json"))
 }
 
-func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.Cid, error) {
+func CreateFilestore(ctx context.Context, srcPath string, dstPath string, msrv *meta.MetaService) (cid.Cid, error) {
 	src, err := os.Open(srcPath)
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to open input file: %w", err)
@@ -140,7 +143,7 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 		return cid.Undef, xerrors.Errorf("failed to create temporary filestore: %w", err)
 	}
 
-	finalRoot1, err := Build(ctx, file, fstore, true, srcPath)
+	finalRoot1, err := Build(ctx, file, fstore, true, srcPath, nil)
 	if err != nil {
 		_ = fstore.Close()
 		return cid.Undef, xerrors.Errorf("failed to import file to store to compute root: %w", err)
@@ -165,7 +168,7 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 		return cid.Undef, xerrors.Errorf("failed to rewind file: %w", err)
 	}
 
-	finalRoot2, err := Build(ctx, file, bs, true, srcPath)
+	finalRoot2, err := Build(ctx, file, bs, true, srcPath, msrv)
 	if err != nil {
 		_ = bs.Close()
 		return cid.Undef, xerrors.Errorf("failed to create UnixFS DAG with carv2 blockstore: %w", err)
@@ -184,7 +187,7 @@ func CreateFilestore(ctx context.Context, srcPath string, dstPath string) (cid.C
 
 const UnixfsLinksPerLevel = 1024
 
-func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filestore bool, srcPath string) (cid.Cid, error) {
+func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filestore bool, srcPath string, msrv *meta.MetaService) (cid.Cid, error) {
 	b, err := CidBuilder()
 	if err != nil {
 		return cid.Undef, err
@@ -193,6 +196,8 @@ func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filest
 	bsvc := blockservice.New(into, offline.Exchange(into))
 	dags := merkledag.NewDAGService(bsvc)
 	bufdag := ipld.NewBufferedDAG(ctx, dags)
+	var spl chunker.Splitter
+	var db ihelper.Helper
 
 	params := ihelper.DagBuilderParams{
 		Maxlinks:   UnixfsLinksPerLevel,
@@ -201,14 +206,18 @@ func Build(ctx context.Context, reader io.Reader, into bstore.Blockstore, filest
 		Dagserv:    bufdag,
 		NoCopy:     filestore,
 	}
-	spl := chunker.NewSliceSplitter(reader, int64(chunker.UnixfsChunkSize), srcPath, func(srcPath string, offset uint64, size uint32, eof bool) {
-		//log.Info("<<<<<< Read srcPath:", srcPath, " offset:", offset, " size:", size)
-		return
-	})
-	db, err := dagbuilder.WrappedDagBuilder(&params, spl)
-	if err != nil {
-		return cid.Undef, err
+
+	if msrv != nil {
+		spl = msrv.GetSplitter(reader, srcPath, true)
+		db, err = msrv.GetHelper(&params, spl)
+	} else {
+		spl = chunker.NewSizeSplitter(reader, int64(mc.UnixfsChunkSize))
+		db, err = dagbuilder.WrappedDagBuilder(&params, spl, dagbuilder.DefaultHelperAction)
+		if err != nil {
+			return cid.Undef, err
+		}
 	}
+
 	nd, err := balanced.LayoutI(db)
 	if err != nil {
 		return cid.Undef, err

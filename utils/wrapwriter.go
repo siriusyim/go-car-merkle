@@ -6,26 +6,27 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-type WriteAction func(path string, cid cid.Cid, count int, total int)
+type WriteAction func(path string, cid cid.Cid, count int, total uint64)
 
 type WrapWriter struct {
 	io.Writer
-	path  string
-	total int
-	count int
-	cb    WriteAction
+	path   string
+	offset uint64
+	count  int
+	cb     WriteAction
 }
 
 func (bc *WrapWriter) Write(p []byte) (int, error) {
 	n, err := bc.Writer.Write(p)
 	if err == nil {
-		bc.total += len(p)
-		bc.count = len(p)
+		size := len(p)
+		bc.count = size
 		c := cid.Undef
-		if len(p) == 38 {
+		if size == 38 {
 			c, _ = cid.Parse(p)
 		}
-		bc.cb(bc.path, c, bc.count, bc.total)
+		bc.cb(bc.path, c, bc.count, bc.offset)
+		bc.offset += uint64(size)
 		return n, nil
 	}
 
