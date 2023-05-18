@@ -16,6 +16,7 @@ type CarMeta struct {
 	DstPath   string           `json:"dstpath"`
 	DstOffset uint64           `json:"dstoffset"`
 	NodeType  pb.Data_DataType `json:"nodetype"`
+	Cid       cid.Cid          `json:"cid"`
 }
 
 func (cm *CarMeta) GetDstRange(c cid.Cid) (uint64, uint64) {
@@ -27,7 +28,7 @@ func (cm *CarMeta) GetDstRange(c cid.Cid) (uint64, uint64) {
 
 	lencount := binary.PutUvarint(buf, sum)
 	start := cm.DstOffset - uint64(lencount)
-	end := cm.DstOffset + uint64(cm.Size)
+	end := cm.DstOffset + uint64(cm.Size) + uint64(cidcount)
 	return start, end
 
 }
@@ -42,19 +43,37 @@ type Range struct {
 	Start uint64 `json:"start"`
 	End   uint64 `json:"end"`
 }
+
 type DstMeta struct {
 	Range     *Range           `json:"range"`
 	SrcPath   string           `json:"srcpath"`
 	SrcOffset uint64           `json:"srcoffset"`
 	Size      uint32           `json:"size"`
 	NodeType  pb.Data_DataType `json:"nodetype"`
+	Cid       cid.Cid          `json:"cid"`
 }
 
 type DstMetaInfo struct {
 	DstMetas map[string][]*DstMeta `json:"verifyinfos"`
 }
 
-func (dmi *DstMetaInfo) GetDstRange(path string) []*Range {
+type DstRanges struct {
+	Ranges map[string][]*Range `json:"ranges"`
+}
+
+func (dmi *DstMetaInfo) GetDstRanges() *DstRanges {
+	drs := &DstRanges{
+		Ranges: make(map[string][]*Range, 0),
+	}
+
+	for k, v := range dmi.DstMetas {
+		drs.Ranges[k] = dmi.getDstRange(k)
+		_ = v
+	}
+	return drs
+}
+
+func (dmi *DstMetaInfo) getDstRange(path string) []*Range {
 	if _, ok := dmi.DstMetas[path]; !ok {
 		return nil
 	}
@@ -63,12 +82,16 @@ func (dmi *DstMetaInfo) GetDstRange(path string) []*Range {
 		return nil
 	}
 	var out []*Range
-	tmp := &Range{
-		Start: dstMeta[0].Range.Start,
-		End:   dstMeta[0].Range.End,
-	}
+	var tmp *Range
 	for i, v := range dstMeta {
-		if tmp.End == v.Range.Start && i != 0 {
+		if i == 0 {
+			tmp = &Range{
+				Start: v.Range.Start,
+				End:   v.Range.End,
+			}
+			continue
+		}
+		if tmp.End == v.Range.Start {
 			tmp.End = v.Range.End
 		} else {
 			out = append(out, tmp)
@@ -108,6 +131,7 @@ func (m *Meta) GetDstMetaInfo() *DstMetaInfo {
 			SrcOffset: v.SrcOffset,
 			Size:      v.Size,
 			NodeType:  v.NodeType,
+			Cid:       v.Cid,
 		})
 	}
 

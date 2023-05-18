@@ -34,7 +34,7 @@ import (
 var MaxTraversalLinks uint64 = 32 * (1 << 20)
 
 var create1Cmd = &cli.Command{
-	Name:      "create1",
+	Name:      "create",
 	Usage:     "Create a car file",
 	ArgsUsage: "<inputPath> <outputPath>",
 	Action:    Create1Car,
@@ -91,7 +91,7 @@ func Create1Car(cctx *cli.Context) error {
 		}},
 		car.MaxTraversalLinks(MaxTraversalLinks),
 	).Write(
-		msrv.GetWriter(f, outPath, true),
+		msrv.GetCarWriter(f, outPath, true),
 	); err != nil {
 		return xerrors.Errorf("failed to write CAR to output file: %w", err)
 	}

@@ -10,6 +10,8 @@ import (
 
 const UnixfsChunkSize uint64 = 1 << 20
 
+//const UnixfsChunkSize uint64 = 1024 * 256
+
 type SplitterAction func(srcPath string, offset uint64, size uint32, eof bool)
 
 func DefaultSplitterAction(srcPath string, offset uint64, size uint32, eof bool) {}

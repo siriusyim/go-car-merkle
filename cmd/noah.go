@@ -25,7 +25,7 @@ func main1() int {
 		Usage:  "Utility for working with car files",
 		Before: before,
 		Commands: []*cli.Command{
-			create0Cmd,
+			//create0Cmd,
 			create1Cmd,
 			extractCmd,
 			listCmd,

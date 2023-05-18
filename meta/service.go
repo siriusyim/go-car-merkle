@@ -56,6 +56,7 @@ func (ms *MetaService) helperAction(c cid.Cid, nodeType pb.Data_DataType) {
 			cm.SrcOffset = meta.Offset
 			cm.Size = meta.Size
 			cm.NodeType = nodeType
+			cm.Cid = c
 		}
 	}
 
@@ -81,22 +82,36 @@ func (ms *MetaService) splitterAction(srcPath string, offset uint64, size uint32
 	return
 }
 
-func (ms *MetaService) GetWriter(w io.Writer, path string, call bool) io.Writer {
+func (ms *MetaService) GetCarWriter(w io.Writer, path string, call bool) io.Writer {
 	if !call {
 		return w
 	}
-	writer := utils.WrappedWriter(w, path, ms.writeAction)
+	writer := utils.WrappedWriter(w, path, ms.carWriteAction)
 	ms.writer = writer
 	return writer
 }
 
-func (ms *MetaService) writeAction(dstpath string, c cid.Cid, count int, offset uint64) {
+func (ms *MetaService) carWriteAction(dstpath string, c cid.Cid, count int, offset uint64) {
 	fmt.Println(">>>>>> Write dstPath:", dstpath, " count:", count, " offset: ", offset, " cid: ", c.String())
 	if _, ok := ms.metas[c]; !ok {
 		fmt.Printf("meta cid: %s is not exist\n", c.String())
 		return
 	}
 	ms.updateMeta(c, dstpath, offset)
+	return
+}
+
+func (ms *MetaService) GetPieceWriter(w io.Writer, path string, call bool) io.Writer {
+	if !call {
+		return w
+	}
+	writer := utils.WrappedWriter(w, path, ms.pieceWriteAction)
+	ms.writer = writer
+	return writer
+}
+
+func (ms *MetaService) pieceWriteAction(dstpath string, c cid.Cid, count int, offset uint64) {
+	fmt.Println(">>>>>> Write piece:", dstpath, " count:", count, " offset: ", offset, " cid: ", c.String())
 	return
 }
 
@@ -128,5 +143,10 @@ func (ms *MetaService) PrintJson(path string) error {
 		Metas: ms.metas,
 	}
 	vmr := meta.GetDstMetaInfo()
-	return utils.WriteJson(path, "\t", vmr)
+	if err := utils.WriteJson(path+"-dm.json", "\t", vmr); err != nil {
+		return err
+	}
+
+	drs := vmr.GetDstRanges()
+	return utils.WriteJson(path+"-dr.json", "\t", drs)
 }

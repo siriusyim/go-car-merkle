@@ -5,6 +5,7 @@ import (
 	commp "github.com/filecoin-project/go-fil-commp-hashhash"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-car"
+	"github.com/siriusyim/go-car-merkle/meta"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -41,8 +42,10 @@ func commpCar(c *cli.Context) error {
 	}
 
 	sc := car.NewSelectiveCar(c.Context, bs, []car.Dag{{Root: cid, Selector: selector}})
+	msrv := meta.New()
 
-	err = sc.Write(cp)
+	err = sc.Write(msrv.GetPieceWriter(cp, "", true))
+
 	if err != nil {
 		return err
 	}

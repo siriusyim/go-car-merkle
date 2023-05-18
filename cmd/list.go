@@ -68,7 +68,6 @@ func ListCar(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
 	for {
 		blk, err := rd.Next()
 		if err != nil {

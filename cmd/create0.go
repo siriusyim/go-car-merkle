@@ -21,7 +21,7 @@ import (
 )
 
 var create0Cmd = &cli.Command{
-	Name:    "create0",
+	Name:    "create",
 	Usage:   "Create a car file",
 	Aliases: []string{"c"},
 	Action:  CreateCar,
