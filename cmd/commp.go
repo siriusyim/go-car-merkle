@@ -44,6 +44,8 @@ func commpCar(c *cli.Context) error {
 	sc := car.NewSelectiveCar(c.Context, bs, []car.Dag{{Root: cid, Selector: selector}})
 	msrv := meta.New()
 
+	msrv.SetPieceCalc(cp)
+
 	err = sc.Write(msrv.GetPieceWriter(cp, "", true))
 
 	if err != nil {
@@ -59,6 +61,8 @@ func commpCar(c *cli.Context) error {
 	}
 
 	log.Info("CommP Cid: ", commCid.String())
+	msrv.PrintPieceCids()
+
 	return nil
 }
 

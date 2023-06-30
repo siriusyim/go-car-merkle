@@ -117,3 +117,5 @@ replace github.com/ipld/go-car/v2 => ../go-car/v2
 replace github.com/ipld/go-car => ../go-car
 
 replace github.com/filecoin-project/boost-gfm => ../boost-gfm
+
+replace github.com/filecoin-project/go-fil-commp-hashhash => ../go-fil-commp-hashhash

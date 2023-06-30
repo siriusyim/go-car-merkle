@@ -5,6 +5,8 @@ import (
 	"io"
 	"sync"
 
+	commcid "github.com/filecoin-project/go-fil-commcid"
+	commp "github.com/filecoin-project/go-fil-commp-hashhash"
 	"github.com/ipfs/go-cid"
 	chunker "github.com/ipfs/go-ipfs-chunker"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
@@ -16,6 +18,9 @@ import (
 	"github.com/siriusyim/go-car-merkle/utils"
 )
 
+const DefaultMaxCommpBuffSizePad = uint64(1 << 20)
+const DefaultMaxCommpBuffSize = uint64(DefaultMaxCommpBuffSizePad - (DefaultMaxCommpBuffSizePad / 128))
+
 type MetaService struct {
 	spl    chunker.Splitter
 	writer io.Writer
@@ -24,17 +29,21 @@ type MetaService struct {
 	metas map[cid.Cid]*types.CarMeta
 	lk    sync.Mutex
 
-	sa    mc.SplitterAction
 	splCh chan *types.SrcData
 
-	wa utils.WriteAction
-	ha mh.HelperAction
+	maxCommpBuffSize uint64
+
+	commpBuffSize uint64
+	calc          *commp.Calc
+	commpHashs    []cid.Cid
 }
 
 func New() *MetaService {
 	return &MetaService{
-		metas: make(map[cid.Cid]*types.CarMeta, 0),
-		splCh: make(chan *types.SrcData),
+		metas:            make(map[cid.Cid]*types.CarMeta, 0),
+		splCh:            make(chan *types.SrcData),
+		maxCommpBuffSize: DefaultMaxCommpBuffSize,
+		commpHashs:       make([]cid.Cid, 0),
 	}
 }
 
@@ -86,12 +95,12 @@ func (ms *MetaService) GetCarWriter(w io.Writer, path string, call bool) io.Writ
 	if !call {
 		return w
 	}
-	writer := utils.WrappedWriter(w, path, ms.carWriteAction)
+	writer := utils.WrappedWriter(w, path, ms.carWriteAfterAction, utils.DefaultWriteBeforeAction)
 	ms.writer = writer
 	return writer
 }
 
-func (ms *MetaService) carWriteAction(dstpath string, c cid.Cid, count int, offset uint64) {
+func (ms *MetaService) carWriteAfterAction(dstpath string, c cid.Cid, count int, offset uint64) {
 	fmt.Println(">>>>>> Write dstPath:", dstpath, " count:", count, " offset: ", offset, " cid: ", c.String())
 	if _, ok := ms.metas[c]; !ok {
 		fmt.Printf("meta cid: %s is not exist\n", c.String())
@@ -105,16 +114,58 @@ func (ms *MetaService) GetPieceWriter(w io.Writer, path string, call bool) io.Wr
 	if !call {
 		return w
 	}
-	writer := utils.WrappedWriter(w, path, ms.pieceWriteAction)
+	writer := utils.WrappedWriter(w, path, utils.DefaultWriteAfterAction, ms.pieceWriteBeforeAction)
 	ms.writer = writer
 	return writer
 }
 
-func (ms *MetaService) pieceWriteAction(dstpath string, c cid.Cid, count int, offset uint64) {
-	fmt.Println(">>>>>> Write piece:", dstpath, " count:", count, " offset: ", offset, " cid: ", c.String())
-	return
+func (ms *MetaService) SetPieceCalc(calc *commp.Calc) error {
+	ms.calc = calc
+	return nil
 }
 
+func (ms *MetaService) generatePieceCid() (cid.Cid, error) {
+	rawCommP, _, err := ms.calc.Digest()
+	if err != nil {
+		return cid.Undef, err
+	}
+	commCid, err := commcid.DataCommitmentV1ToCID(rawCommP)
+	if err != nil {
+		return cid.Undef, err
+	}
+	return commCid, nil
+}
+
+func (ms *MetaService) pieceWriteBeforeAction(buf []byte, w io.Writer) ([]byte, error) {
+	count := len(buf)
+	if ms.commpBuffSize+uint64(count) >= ms.maxCommpBuffSize {
+
+		toWriteLen := ms.commpBuffSize + uint64(count) - ms.maxCommpBuffSize
+		if _, err := w.Write(buf[:toWriteLen]); err != nil {
+			return nil, err
+		}
+
+		sliceCid, err := ms.generatePieceCid()
+		if err != nil {
+			return nil, err
+		}
+
+		ms.commpHashs = append(ms.commpHashs, sliceCid)
+
+		ms.commpBuffSize = 0
+		return buf[toWriteLen:], nil
+	}
+
+	ms.commpBuffSize += uint64(len(buf))
+	//fmt.Println(">>>>>> Write piece:", dstpath, " count:", count, " offset: ", offset, " cid: ", c.String())
+	return buf, nil
+}
+
+func (ms *MetaService) PrintPieceCids() {
+	for _, v := range ms.commpHashs {
+		fmt.Println("cid:", v.String())
+	}
+}
 func (ms *MetaService) insertMeta(c cid.Cid, cm *types.CarMeta) error {
 	ms.lk.Lock()
 	defer ms.lk.Unlock()
